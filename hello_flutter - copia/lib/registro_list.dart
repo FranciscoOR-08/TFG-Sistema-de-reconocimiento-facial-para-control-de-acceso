@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'registro_model.dart';
 import 'registro_service.dart';
 import 'package:intl/intl.dart';
+import 'video_screen.dart';
+import 'enrolled_faces_page.dart';
 
 class RegistroList extends StatefulWidget {
   const RegistroList({super.key});
@@ -38,6 +40,26 @@ class _RegistroListState extends State<RegistroList> {
             icon: const Icon(Icons.refresh),
             onPressed: _refreshRegistros,
           ),
+          IconButton(
+            tooltip: 'Ver video en vivo',
+            icon: const Icon(Icons.videocam),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const VideoScreen()),
+              );
+            },
+          ),
+          IconButton(
+            tooltip: 'Rostros enrolados',
+            icon: const Icon(Icons.people),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const EnrolledFacesPage()),
+              );
+            },
+          ),
         ],
       ),
       body: FutureBuilder<List<Registro>>(
@@ -49,8 +71,7 @@ class _RegistroListState extends State<RegistroList> {
             return Center(
               child: Text(
                 'Error: ${snapshot.error}',
-                style: theme.textTheme.bodyLarge
-                    ?.copyWith(color: theme.colorScheme.error),
+                style: theme.textTheme.bodyLarge?.copyWith(color: theme.colorScheme.error),
                 textAlign: TextAlign.center,
               ),
             );
@@ -58,14 +79,12 @@ class _RegistroListState extends State<RegistroList> {
             return Center(
               child: Text(
                 'No hay registros disponibles',
-                style: theme.textTheme.bodyMedium
-                    ?.copyWith(color: Colors.grey),
+                style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
               ),
             );
           }
 
           final registros = snapshot.data!;
-          // Ordenar por más recientes primero
           registros.sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
           return ListView.separated(
@@ -74,31 +93,23 @@ class _RegistroListState extends State<RegistroList> {
             separatorBuilder: (_, __) => const SizedBox(height: 10),
             itemBuilder: (context, index) {
               final r = registros[index];
-              final fecha = DateFormat('d MMMM y, HH:mm:ss', 'es_ES')
-                  .format(r.timestamp);
+              final fecha = DateFormat('d MMMM y, HH:mm:ss', 'es_ES').format(r.timestamp);
               final isSuccess = r.status.toLowerCase() == 'success';
 
               return Card(
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 elevation: 4,
-                shadowColor: isSuccess
-                    ? Colors.greenAccent.withOpacity(0.3)
-                    : Colors.redAccent.withOpacity(0.3),
+                shadowColor: isSuccess ? Colors.greenAccent.withOpacity(0.3) : Colors.redAccent.withOpacity(0.3),
                 child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 20, vertical: 14),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                   leading: Icon(
-                    isSuccess
-                        ? Icons.check_circle_outline
-                        : Icons.error_outline,
+                    isSuccess ? Icons.check_circle_outline : Icons.error_outline,
                     color: isSuccess ? Colors.green : Colors.red,
                     size: 36,
                   ),
                   title: Text(
-                    r.message, // 👈 mensaje / nombre en grande
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.bold),
+                    r.message,
+                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                   ),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -111,8 +122,7 @@ class _RegistroListState extends State<RegistroList> {
                       const SizedBox(height: 8),
                       Text(
                         fecha,
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: Colors.grey[600]),
+                        style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
                       ),
                     ],
                   ),
@@ -133,3 +143,4 @@ class _RegistroListState extends State<RegistroList> {
     );
   }
 }
+

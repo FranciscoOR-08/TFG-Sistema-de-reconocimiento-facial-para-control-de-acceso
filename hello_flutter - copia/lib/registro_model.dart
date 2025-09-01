@@ -1,10 +1,11 @@
+//Registro_model.dart
 class Registro {
   final int id;
   final String status;
   final String message;
   final int? faceId;
   final DateTime timestamp;
-  final String origin; // ✅ nuevo campo
+  final String origin; // 👈 nuevo campo
 
   Registro({
     required this.id,
@@ -22,7 +23,7 @@ class Registro {
       message: json['message'],
       faceId: json['face_id'],
       timestamp: DateTime.parse(json['timestamp']),
-      origin: json['origin'] ?? 'DESCONOCIDO',
+      origin: json['origin'] ?? 'DESCONOCIDO', // fallback por si falta
     );
   }
 }

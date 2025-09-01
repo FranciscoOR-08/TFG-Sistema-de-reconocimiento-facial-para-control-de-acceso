@@ -1,3 +1,4 @@
+//main.dart
 import 'package:flutter/material.dart';
 import 'registro_list.dart';
 import 'package:intl/date_symbol_data_local.dart'; // <-- Importación necesaria
