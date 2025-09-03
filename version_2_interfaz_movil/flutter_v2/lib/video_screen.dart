@@ -1,3 +1,14 @@
+// =====================================================
+// Pantalla de video en vivo (VideoScreen)
+//
+// Funcionalidades:
+//  - Conexión a backend FastAPI vía WebSocket (/ws/stream).
+//  - Recepción de imágenes (binario) y mensajes (texto).
+//  - Envío de comandos al backend vía HTTP POST (/send-command).
+//  - Control de modos: streaming, detección, reconocimiento y enrolamiento.
+//  - Interfaz con estado visual de la cámara y notificaciones.
+// =====================================================
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'dart:typed_data';
@@ -5,62 +16,69 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
-// Añade este canal para conectar con FastAPI (modo servidor)
-//final WebSocketChannel fastApiChannel =
-//WebSocketChannel.connect(Uri.parse('ws://192.168.18.9:8000/ws/stream'));
-
 class VideoScreen extends StatefulWidget {
   const VideoScreen({super.key});
 
   @override
   State<VideoScreen> createState() => _VideoScreenState();
-
 }
 
 class _VideoScreenState extends State<VideoScreen> {
+  // Canal WebSocket hacia el backend FastAPI
   late WebSocketChannel fastApiChannel;
+
+  // Stream en broadcast para poder escuchar múltiples veces
   late Stream<dynamic> broadcastStream;
 
+  // Variables de estado de UI
   String lastMessageConfirmacion = 'Esperando mensajes...';
-  String faceStatus = ''; // Estado para avisos tipo detección/ reconocimiento
+  String faceStatus = '';          // Estado actual de detección / reconocimiento
   String currentMode = 'DESCONOCIDO';
   String processingMode = 'SERVIDOR';
+
+  // Controladores de texto para enrolamiento y borrado
+  final TextEditingController _enrollNameController = TextEditingController();
+  final TextEditingController _removeNameController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
 
-    fastApiChannel = WebSocketChannel.connect(Uri.parse('ws://192.168.18.14:8000/ws/stream'));
+    // Conectar al WebSocket del backend
+    fastApiChannel = WebSocketChannel.connect(
+      Uri.parse('ws://192.168.18.14:8000/ws/stream'),
+    );
 
+    // Crear stream broadcast
     broadcastStream = fastApiChannel.stream.asBroadcastStream();
 
+    // Escuchar los mensajes recibidos del WebSocket
     broadcastStream.listen((event) {
-
       if (event is String) {
         setState(() {
           lastMessageConfirmacion = event;
 
+          // Actualizar estado visible en la interfaz según mensaje recibido
           if (event.contains('NO FACE DETECTED')) {
             faceStatus = 'No se detectó ninguna cara';
           } else if (event.contains('FACE DETECTED')) {
             faceStatus = '¡Cara detectada!';
           } else if (event.startsWith('Bienvenido')) {
-            faceStatus = event; // Ej: "Bienvenido Juan"
+            faceStatus = event; // Ejemplo: "Bienvenido Juan"
           } else if (event == 'FACE NOT RECOGNISED') {
             faceStatus = 'Rostro no reconocido';
           } else if (event.startsWith('SAMPLE NUMBER')) {
-            faceStatus = event; // Estado enrolamiento
+            faceStatus = event; // Estado durante enrolamiento
           } else if (event.startsWith('Added')) {
-            faceStatus = event; // Confirmación añadido
+            faceStatus = event; // Confirmación de registro exitoso
           } else if (event.contains('NO HAY ROSTROS')) {
             faceStatus = '¡No hay rostros registrados!';
           } else {
-            faceStatus = ''; // Otros mensajes no afectan la barra amarilla
+            faceStatus = ''; // Otros mensajes no se muestran
           }
 
-          // ✅ Manejo extra: actualizar modo si viene como mensaje de texto
+          // Actualizar estado de modo según texto recibido
           final lower = event.toLowerCase();
-
           if (lower.contains('streaming')) {
             currentMode = 'STREAMING';
           } else if (lower.contains('detecting')) {
@@ -70,7 +88,6 @@ class _VideoScreenState extends State<VideoScreen> {
           } else if (lower.contains('recognising')) {
             currentMode = 'RECOGNISING';
           }
-
         });
       }
     });
@@ -78,27 +95,33 @@ class _VideoScreenState extends State<VideoScreen> {
 
   @override
   void dispose() {
+    // Antes de cerrar: volver a modo stream + servidor
     sendCommandToServer('stream');
     sendCommandToServer('server_mode');
 
     _enrollNameController.dispose();
     _removeNameController.dispose();
-    fastApiChannel.sink.close(); // ← IMPORTANTE
+    fastApiChannel.sink.close(); // Cierra la conexión WS
     super.dispose();
   }
 
+  // =====================================================
+  // Renderizar video en tiempo real (StreamBuilder)
+  // =====================================================
   Widget buildStreamWidget() {
     return StreamBuilder(
       stream: broadcastStream,
       builder: (context, snapshot) {
         if (snapshot.hasData && snapshot.data is Uint8List) {
+          // Datos binarios → frame de video
           return Image.memory(
             snapshot.data as Uint8List,
             gaplessPlayback: true,
             fit: BoxFit.contain,
           );
         } else if (snapshot.hasData && snapshot.data is String) {
-          return const SizedBox(); // ignora mensajes tipo texto, ya los maneja `listen(...)`
+          // Mensajes de texto → se ignoran aquí (ya se gestionan en listen)
+          return const SizedBox();
         } else {
           return const Center(child: Text("Esperando video del servidor..."));
         }
@@ -106,27 +129,18 @@ class _VideoScreenState extends State<VideoScreen> {
     );
   }
 
-
+  // Último mensaje del backend (texto)
   String lastMessage = 'Esperando mensajes...';
 
-
-  final TextEditingController _enrollNameController = TextEditingController();
-  final TextEditingController _removeNameController = TextEditingController();
-
-  /*@override
-  void dispose() {
-    _enrollNameController.dispose();
-    _removeNameController.dispose();
-    fastApiChannel.sink.close(); // ← IMPORTANTE
-    super.dispose();
-  }*/
-
+  // =====================================================
+  // Enviar comando HTTP POST a backend (/send-command)
+  // =====================================================
   Future<void> sendCommandToServer(String cmd) async {
     try {
       setState(() {
-        faceStatus = '';
+        faceStatus = ''; // Reset estado al enviar nuevo comando
       });
-      // Construimos la URL con el parámetro cmd en query string
+
       final uri = Uri.parse('http://192.168.18.14:8000/send-command');
 
       final response = await http.post(
@@ -137,12 +151,11 @@ class _VideoScreenState extends State<VideoScreen> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        // esp32_response viene como string JSON, intentamos parsearlo para obtener el modo
         dynamic esp32Resp = data['esp32_response'];
         String? modeFromResp;
 
+        // Backend puede devolver respuesta como mapa o string
         if (esp32Resp is Map) {
-          // Caso ideal: el servidor ya devolvió un objeto
           modeFromResp = esp32Resp['response']?.toString().toUpperCase();
         } else if (esp32Resp is String) {
           try {
@@ -150,19 +163,19 @@ class _VideoScreenState extends State<VideoScreen> {
             if (parsed is Map) {
               modeFromResp = parsed['response']?.toString().toUpperCase();
             }
-          } catch (e) {
-            // Ignorar errores de parseo si la cadena no es JSON
-          }
+          } catch (_) {}
         }
+
         setState(() {
           lastMessage = 'Respuesta servidor: $esp32Resp';
 
+          // Actualizar estado según respuesta
           if (modeFromResp != null) {
             if (modeFromResp == 'ESP32_MODE_ON') {
               processingMode = 'ESP32';
             } else if (modeFromResp == 'SERVER_MODE_ON') {
               processingMode = 'SERVIDOR';
-            }else if (['STREAMING', 'DETECTING', 'CAPTURING', 'RECOGNISING']
+            } else if (['STREAMING', 'DETECTING', 'CAPTURING', 'RECOGNISING']
                 .contains(modeFromResp)) {
               currentMode = modeFromResp;
             }
@@ -180,6 +193,9 @@ class _VideoScreenState extends State<VideoScreen> {
     }
   }
 
+  // =====================================================
+  // Interfaz principal de la pantalla
+  // =====================================================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -193,6 +209,7 @@ class _VideoScreenState extends State<VideoScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // Card con video en vivo y barra amarilla de estado
               Card(
                 color: Colors.black,
                 elevation: 4,
@@ -224,27 +241,26 @@ class _VideoScreenState extends State<VideoScreen> {
                 ),
               ),
               const SizedBox(height: 12),
+
+              // Panel de control de modos
               Card(
                 elevation: 2,
                 child: Padding(
                   padding: const EdgeInsets.all(12),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(
-                        'Modo actual: $currentMode',
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        'Procesamiento: $processingMode',
-                        style: const TextStyle(fontSize: 14, color: Colors.grey),
-                      ),
+                      Text('Modo actual: $currentMode',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      Text('Procesamiento: $processingMode',
+                          style: const TextStyle(fontSize: 14, color: Colors.grey)),
                       const SizedBox(height: 8),
+
+                      // Botones de control
                       Wrap(
                         spacing: 10,
                         runSpacing: 10,
-                        alignment: WrapAlignment.center, // centra los elementos
+                        alignment: WrapAlignment.center,
                         children: [
                           ElevatedButton(
                             onPressed: () => sendCommandToServer('stream'),
@@ -258,8 +274,6 @@ class _VideoScreenState extends State<VideoScreen> {
                             onPressed: () => sendCommandToServer('recognise'),
                             child: const Text('Reconocer Rostro'),
                           ),
-
-                          // 👇 agrupamos los dos modos en una fila
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -267,22 +281,13 @@ class _VideoScreenState extends State<VideoScreen> {
                                 onPressed: () => sendCommandToServer('esp32_mode'),
                                 child: const Text('Modo ESP32'),
                               ),
-                              const SizedBox(width: 10), // espacio entre ellos
+                              const SizedBox(width: 10),
                               ElevatedButton(
                                 onPressed: () => sendCommandToServer('server_mode'),
                                 child: const Text('Modo Servidor'),
                               ),
                             ],
                           ),
-
-                          // 👇 este ejemplo es para un botón suelto centrado
-                          /*Align(
-                            alignment: Alignment.center,
-                            child: ElevatedButton(
-                              onPressed: () => sendCommandToServer('delete_all'),
-                              child: const Text('Eliminar Todos'),
-                            ),
-                          ),*/
                         ],
                       ),
                     ],
@@ -290,6 +295,8 @@ class _VideoScreenState extends State<VideoScreen> {
                 ),
               ),
               const SizedBox(height: 12),
+
+              // Formulario de enrolamiento
               Card(
                 elevation: 2,
                 child: Padding(
@@ -317,18 +324,6 @@ class _VideoScreenState extends State<VideoScreen> {
                   ),
                 ),
               ),
-              /*const SizedBox(height: 12),
-              Card(
-                color: Colors.grey[100],
-                elevation: 2,
-                child: Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Text(
-                    lastMessage,
-                    style: const TextStyle(fontSize: 14),
-                  ),
-                ),
-              ),*/
             ],
           ),
         ),
@@ -336,4 +331,3 @@ class _VideoScreenState extends State<VideoScreen> {
     );
   }
 }
-

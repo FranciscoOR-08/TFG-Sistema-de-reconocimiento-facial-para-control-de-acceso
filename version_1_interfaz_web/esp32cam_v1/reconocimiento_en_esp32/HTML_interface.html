@@ -1,0 +1,402 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Face Recognition Access Control</title>
+  <style>
+    :root {
+      --bg-color: #121212;
+      --text-color: #e0e0e0;
+      --accent-color: #4caf50;
+      --danger-color: #ff3b3f;
+      --btn-bg: #2c2c2c;
+      --btn-hover: #3d3d3d;
+    }
+
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      font-size: 16px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    @media (min-width: 850px) {
+      body {
+        flex-direction: row;
+      }
+
+      #content-right {
+        margin-left: 20px;
+      }
+    }
+
+    #content-left, #content-right {
+      flex: 1;
+      max-width: 450px;
+      padding: 20px;
+    }
+
+    #stream {
+      width: 100%;
+      border-radius: 12px;
+      border: 2px solid #333;
+    }
+
+    #status-display {
+      text-align: center;
+      background-color: var(--accent-color);
+      color: #fff;
+      padding: 12px;
+      font-weight: bold;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+
+    #person {
+      width: 100%;
+      padding: 12px;
+      font-size: 16px;
+      border: none;
+      border-radius: 8px;
+      box-sizing: border-box;
+      margin-bottom: 15px;
+      background: #2a2a2a;
+      color: #fff;
+    }
+
+    .buttons {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    button {
+      flex: 1;
+      margin: 0 5px;
+      padding: 10px 12px;
+      font-size: 15px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      background-color: var(--btn-bg);
+      color: var(--text-color);
+      transition: background 0.2s ease, box-shadow 0.3s ease;
+    }
+
+    button:hover {
+      background-color: var(--btn-hover);
+    }
+
+    button:disabled {
+      background-color: #555;
+      cursor: not-allowed;
+    }
+
+    .active-mode {
+      box-shadow: 0 0 10px 3px var(--accent-color);
+    }
+
+    .active-server {
+      box-shadow: 0 0 10px 2px orange;
+    }
+
+    .people {
+      margin-top: 20px;
+    }
+
+    .people h3 {
+      margin-bottom: 10px;
+      font-weight: normal;
+    }
+
+    ul {
+      list-style: none;
+      padding-left: 0;
+    }
+
+    li {
+      background: #1e1e1e;
+      padding: 8px 12px;
+      border-radius: 6px;
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .delete {
+      background-color: var(--danger-color);
+      padding: 4px 10px;
+      border-radius: 50px;
+      cursor: pointer;
+    }
+
+    .delete:hover {
+      background-color: #ff6064;
+    }
+
+    strong {
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div id="content-left">
+    <div id="stream-container" class="image-container">
+      <img id="stream" src="">
+    </div>
+  </div>
+  <div id="content-right">
+    <div id="status-display"><span id="current-status"></span></div>
+    <div id="person-name">
+      <input id="person" type="text" placeholder="Type the person's name here">
+    </div>
+    <div class="buttons">
+      <button id="button-stream">STREAM</button>
+      <button id="button-detect">DETECTAR ROSTROS</button>
+    </div>
+    <div class="buttons">
+      <button id="button-capture" title="Enter a name above before capturing a face">AÑADIR USUARIO</button>
+      <button id="button-recognise">RECONOCIMIENTO FACIAL</button>
+    </div>
+    <div class="buttons">
+      <button id="button-server-mode">MODO SERVIDOR</button>
+      <button id="button-esp32-mode">MODO ESP32</button>
+    </div>
+    <div class="people">
+      <h3>USUARIOS (ESP32)</h3>
+      <ul id="esp32-list"></ul>
+      <div class="buttons">
+        <button id="delete_esp32_all">ELIMINAR TODOS LOS USUARIOS (ESP32)</button>
+      </div>
+    </div>
+    <div class="people">
+      <h3>USUARIOS (SERVIDOR)</h3>
+      <ul id="server-list"></ul>
+      <div class="buttons">
+        <button id="delete_server_all">ELIMINAR TODOS LOS USUARIOS (SERVIDOR)</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      const baseHost = document.location.origin;
+      const streamUrl = baseHost + ":81";
+      const WS_URL = "ws://" + window.location.host + ":82";
+      const ws = new WebSocket(WS_URL);
+
+      const view = document.getElementById("stream");
+      const personFormField = document.getElementById("person");
+      const streamButton = document.getElementById("button-stream");
+      const detectButton = document.getElementById("button-detect");
+      const captureButton = document.getElementById("button-capture");
+      const recogniseButton = document.getElementById("button-recognise");
+      const serverModeButton = document.getElementById("button-server-mode");
+      const esp32ModeButton = document.getElementById("button-esp32-mode");
+
+      // Nuevos elementos para listas servidor y esp32
+      const serverList = document.getElementById("server-list");
+      const esp32List = document.getElementById("esp32-list");
+
+      const deleteAllEsp32Button = document.getElementById("delete_esp32_all");
+      const deleteAllServerButton = document.getElementById("delete_server_all");
+
+      const audioCtx = new AudioContext();
+      function alertSound(w, x, y) {
+        const v = audioCtx.createOscillator();
+        const u = audioCtx.createGain();
+        v.connect(u);
+        v.frequency.value = x;
+        v.type = "square";
+        u.connect(audioCtx.destination);
+        u.gain.value = w * 0.01;
+        v.start(audioCtx.currentTime);
+        v.stop(audioCtx.currentTime + y * 0.001);
+      }
+
+      function setActiveModeButton(activeBtn) {
+        [streamButton, detectButton, captureButton, recogniseButton].forEach(btn =>
+          btn.classList.remove("active-mode")
+        );
+        activeBtn.classList.add("active-mode");
+      }
+
+      function setActiveServerMode(activeBtn) {
+        [serverModeButton, esp32ModeButton].forEach(btn =>
+          btn.classList.remove("active-server")
+        );
+        activeBtn.classList.add("active-server");
+      }
+
+      ws.onopen = () => console.log(`Connected to ${WS_URL}`);
+
+      ws.onmessage = message => {
+        if (typeof message.data === "string") {
+          if (message.data.startsWith("listface")) {
+            // Asumimos que es lista ESP32
+            addFaceToEsp32List(message.data.substr(9));
+          } else if (message.data === "delete_faces") {
+            deleteAllFacesFromEsp32List();
+          } else if (message.data === "FACE NOT RECOGNISED") {
+            document.getElementById("current-status").innerText = "No reconocido";
+            document.getElementById("status-display").style.background = "#f44336"; // rojo
+          } else if (message.data.startsWith("STATE:")) {
+            const newState = message.data.split(":")[1];
+            if (newState === "START_STREAM") {
+              setActiveModeButton(streamButton);
+              document.getElementById("current-status").innerText = "Modo Stream Activado";
+              fetchServerFaces();
+            } else if (newState === "START_ENROLL") {
+              setActiveModeButton(captureButton);
+              document.getElementById("current-status").innerText = "Listo para registrar";
+            } else if (newState === "START_SERVER") {
+              setActiveServerMode(serverModeButton);
+              document.getElementById("current-status").innerText = "Modo Servidor Activado";
+              document.getElementById("status-display").style.background = "#FFA500"; // naranja
+            } else if (newState === "START_ESP32") {
+              setActiveServerMode(esp32ModeButton);
+              document.getElementById("current-status").innerText = "Modo ESP32 activado";
+              document.getElementById("status-display").style.background = "#4CAF50"; // verde
+            }
+          } else {
+            document.getElementById("current-status").innerText = message.data;
+            document.getElementById("status-display").style.background = "#4CAF50";
+          }
+        } else if (message.data instanceof Blob) {
+          const urlObject = URL.createObjectURL(message.data);
+          view.src = urlObject;
+        }
+      };
+
+      // FUNCIONES PARA ESP32 LIST
+
+      function addFaceToEsp32List(name) {
+        if (!name) return;
+        // Evita duplicados
+        if ([...esp32List.children].some(li => li.firstChild.textContent === name)) return;
+
+        const listItem = document.createElement("li");
+        const nameStrong = document.createElement("strong");
+        nameStrong.textContent = name;
+
+        const closeItem = document.createElement("span");
+        closeItem.classList.add("delete");
+        closeItem.textContent = "X";
+        closeItem.onclick = () => {
+          ws.send("remove_esp32:" + name);
+          listItem.remove();  // Esto elimina el elemento de la lista en la UI inmediatamente
+        };
+
+        listItem.appendChild(nameStrong);
+        listItem.appendChild(closeItem);
+        esp32List.appendChild(listItem);
+      }
+
+      function deleteAllFacesFromEsp32List() {
+        esp32List.innerHTML = "";
+      }
+
+      // FUNCIONES PARA SERVER LIST
+
+      async function fetchServerFaces() {
+        try {
+          const res = await fetch("http://localhost:8000/get-embeddings-servidor");
+          if (!res.ok) throw new Error("Error fetching server faces");
+          const faces = await res.json();
+          updateServerListUI(faces);
+        } catch (e) {
+          console.error(e);
+          document.getElementById("current-status").innerText = "Error cargando lista servidor";
+          document.getElementById("status-display").style.background = "#f44336"; // rojo para error
+        }
+      }
+
+      function updateServerListUI(faces) {
+        serverList.innerHTML = "";
+        faces.forEach(name => {
+          const li = document.createElement("li");
+          const nameStrong = document.createElement("strong");
+          nameStrong.textContent = name;
+
+          const delBtn = document.createElement("span");
+          delBtn.textContent = "X";
+          delBtn.classList.add("delete");
+          delBtn.onclick = async () => {
+            await fetch(`http://localhost:8000/delete-embedding-servidor/${encodeURIComponent(name)}`, {method: "DELETE"});
+            fetchServerFaces();
+          };
+
+          li.appendChild(nameStrong);
+          li.appendChild(delBtn);
+          serverList.appendChild(li);
+        });
+      }
+
+      // BOTONES DELETE ALL
+      // Asumir que existen botones con id delete_esp32_all y delete_server_all
+      deleteAllEsp32Button?.addEventListener("click", () => {
+        ws.send("delete_all_esp32");
+        deleteAllFacesFromEsp32List();  // Esto limpia la UI directamente
+      });
+
+      deleteAllServerButton?.addEventListener("click", async () => {
+        await fetch("http://localhost:8000/clear-embeddings-servidor", { method: "POST" });
+        fetchServerFaces();
+      });
+
+      // Resto botones originales:
+
+      streamButton.onclick = () => {
+        ws.send("stream");
+        setActiveModeButton(streamButton);
+      };
+
+      detectButton.onclick = () => {
+        ws.send("detect");
+        setActiveModeButton(detectButton);
+      };
+
+      captureButton.onclick = () => {
+        const name = personFormField.value.trim();
+        if (name) {
+          ws.send("capture:" + name);
+          setActiveModeButton(captureButton);
+        }
+      };
+
+      recogniseButton.onclick = () => {
+        ws.send("recognise");
+        setActiveModeButton(recogniseButton);
+      };
+
+      serverModeButton.onclick = () => {
+        ws.send("server_mode");
+        setActiveServerMode(serverModeButton);
+        document.getElementById("status-display").style.background = "#FFA500";
+        document.getElementById("current-status").innerText = "Modo SERVIDOR activado";
+      };
+
+      esp32ModeButton.onclick = () => {
+        ws.send("esp32_mode");
+        setActiveServerMode(esp32ModeButton);
+        document.getElementById("status-display").style.background = "#4CAF50";
+        document.getElementById("current-status").innerText = "Modo ESP32 activado";
+      };
+
+      personFormField.oninput = () => {
+        captureButton.disabled = personFormField.value.trim() === "";
+      };
+
+      // Al cargar la página, carga la lista servidor
+      fetchServerFaces();
+
+      captureButton.disabled = true;
+  });
+  </script>
+</body>
+</html>

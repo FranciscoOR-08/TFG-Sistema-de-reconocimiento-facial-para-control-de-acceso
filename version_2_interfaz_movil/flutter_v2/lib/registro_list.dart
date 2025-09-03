@@ -2,9 +2,16 @@ import 'package:flutter/material.dart';
 import 'registro_model.dart';
 import 'registro_service.dart';
 import 'package:intl/intl.dart';
-import 'video_screen.dart';
-import 'enrolled_faces_page.dart';
+import 'video_screen.dart';          // 👈 Pantalla para ver el streaming en vivo
+import 'enrolled_faces_page.dart';  // 👈 Pantalla con la lista de rostros enrolados
 
+/// =====================================================
+/// Widget principal que muestra el historial de accesos.
+/// Incluye acceso a:
+///   - Actualización de registros
+///   - Pantalla de streaming en vivo
+///   - Lista de rostros enrolados
+/// =====================================================
 class RegistroList extends StatefulWidget {
   const RegistroList({super.key});
 
@@ -13,14 +20,17 @@ class RegistroList extends StatefulWidget {
 }
 
 class _RegistroListState extends State<RegistroList> {
+  // Lista futura de registros obtenidos desde el backend FastAPI
   late Future<List<Registro>> _futureRegistros;
 
   @override
   void initState() {
     super.initState();
+    // Carga inicial de registros desde el backend
     _futureRegistros = RegistroService.fetchRegistros();
   }
 
+  /// Fuerza la recarga de registros cuando el usuario pulsa "Actualizar"
   void _refreshRegistros() {
     setState(() {
       _futureRegistros = RegistroService.fetchRegistros();
@@ -35,11 +45,13 @@ class _RegistroListState extends State<RegistroList> {
       appBar: AppBar(
         title: const Text('Historial de Accesos'),
         actions: [
+          // Botón para refrescar registros
           IconButton(
             tooltip: 'Actualizar registros',
             icon: const Icon(Icons.refresh),
             onPressed: _refreshRegistros,
           ),
+          // Botón para abrir pantalla de streaming
           IconButton(
             tooltip: 'Ver video en vivo',
             icon: const Icon(Icons.videocam),
@@ -50,6 +62,7 @@ class _RegistroListState extends State<RegistroList> {
               );
             },
           ),
+          // Botón para abrir la lista de rostros enrolados
           IconButton(
             tooltip: 'Rostros enrolados',
             icon: const Icon(Icons.people),
@@ -62,29 +75,40 @@ class _RegistroListState extends State<RegistroList> {
           ),
         ],
       ),
+
+      // ============================
+      // Cuerpo: lista de registros
+      // ============================
       body: FutureBuilder<List<Registro>>(
         future: _futureRegistros,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
+            // Mientras carga
             return const Center(child: CircularProgressIndicator());
           } else if (snapshot.hasError) {
+            // Error al obtener registros
             return Center(
               child: Text(
                 'Error: ${snapshot.error}',
-                style: theme.textTheme.bodyLarge?.copyWith(color: theme.colorScheme.error),
+                style: theme.textTheme.bodyLarge
+                    ?.copyWith(color: theme.colorScheme.error),
                 textAlign: TextAlign.center,
               ),
             );
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            // Sin registros disponibles
             return Center(
               child: Text(
                 'No hay registros disponibles',
-                style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(color: Colors.grey),
               ),
             );
           }
 
+          // Registros obtenidos correctamente
           final registros = snapshot.data!;
+          // Ordenar por fecha descendente (más recientes primero)
           registros.sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
           return ListView.separated(
@@ -93,24 +117,46 @@ class _RegistroListState extends State<RegistroList> {
             separatorBuilder: (_, __) => const SizedBox(height: 10),
             itemBuilder: (context, index) {
               final r = registros[index];
-              final fecha = DateFormat('d MMMM y, HH:mm:ss', 'es_ES').format(r.timestamp);
+
+              // Formato de fecha con intl en español
+              final fecha = DateFormat('d MMMM y, HH:mm:ss', 'es_ES')
+                  .format(r.timestamp);
+
+              // Determina si el acceso fue exitoso o no
               final isSuccess = r.status.toLowerCase() == 'success';
 
               return Card(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
                 elevation: 4,
-                shadowColor: isSuccess ? Colors.greenAccent.withOpacity(0.3) : Colors.redAccent.withOpacity(0.3),
+                shadowColor: isSuccess
+                    ? Colors.greenAccent.withOpacity(0.3)
+                    : Colors.redAccent.withOpacity(0.3),
+
+                // =======================
+                // Item individual registro
+                // =======================
                 child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 20, vertical: 14),
+
+                  // Icono de estado
                   leading: Icon(
-                    isSuccess ? Icons.check_circle_outline : Icons.error_outline,
+                    isSuccess
+                        ? Icons.check_circle_outline
+                        : Icons.error_outline,
                     color: isSuccess ? Colors.green : Colors.red,
                     size: 36,
                   ),
+
+                  // Mensaje principal
                   title: Text(
                     r.message,
-                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.bold),
                   ),
+
+                  // Subdetalles: origen + fecha
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -122,10 +168,13 @@ class _RegistroListState extends State<RegistroList> {
                       const SizedBox(height: 8),
                       Text(
                         fecha,
-                        style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: Colors.grey[600]),
                       ),
                     ],
                   ),
+
+                  // Estado en texto (SUCCESS / ERROR)
                   trailing: Text(
                     r.status.toUpperCase(),
                     style: theme.textTheme.labelLarge?.copyWith(
@@ -143,4 +192,3 @@ class _RegistroListState extends State<RegistroList> {
     );
   }
 }
-

@@ -31,7 +31,8 @@ from insightface.app import FaceAnalysis
 
 app = FastAPI()
 
-# CORS (para desarrollo; ajustar en producción)
+# Middleware CORS: permite que el backend sea accedido desde cualquier origen
+# (útil en desarrollo; en producción conviene restringirlo)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  
@@ -42,11 +43,11 @@ app.add_middleware(
 
 # Archivos de base de datos
 FACE_DB_FILE = "face_db.pkl"          # Embeddings del servidor
-db_path_esp32 = "face_db_esp32.pkl"  # Embeddings enviados desde ESP32
+db_path_esp32 = "face_db_esp32.pkl"   # Embeddings enviados desde ESP32
 
 # Buffer temporal para enrolamiento (varias muestras antes de guardar)
-enroll_buffer = {}  # {nombre: [embedding1, embedding2, ...]}
-NUM_EMBEDDINGS_REQUIRED = 3
+enroll_buffer = {}          # {nombre: [embedding1, embedding2, ...]}
+NUM_EMBEDDINGS_REQUIRED = 3 # nº mínimo de muestras por usuario
 
 # =====================================================
 # CARGA INICIAL DE BASES DE DATOS DE EMBEDDINGS
@@ -98,40 +99,18 @@ def convert_np_arrays_to_lists(obj):
 # =====================================================
 # FUNCIONES PARA BASE DE DATOS SQLITE DE RESULTADOS
 # =====================================================
-"""
-def create_table():
-    Crear tabla SQLite si no existe
-    conn = sqlite3.connect('accesos.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS recognition_results (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            status TEXT,
-            message TEXT,
-            face_id INTEGER,
-            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    conn.commit()
-    conn.close()
-
-def insert_result(status: str, message: str, face_id: int):
-    Insertar un nuevo resultado en la base de datos
-    conn = sqlite3.connect('accesos.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        INSERT INTO recognition_results (status, message, face_id) 
-        VALUES (?, ?, ?)
-    ''', (status, message, face_id))
-    conn.commit()
-    conn.close()
-"""
-# =====================================================
-# FUNCIONES PARA BASE DE DATOS SQLITE DE RESULTADOS
-# =====================================================
 
 def create_table():
-    """Crear tabla SQLite si no existe"""
+    """
+    Crear tabla SQLite para guardar resultados de reconocimiento.
+    Campos:
+      - id (autoincremental)
+      - status (éxito / error)
+      - message (información asociada)
+      - face_id (ID del rostro reconocido)
+      - timestamp (fecha/hora automática)
+      - origin (SERVER / ESP32)
+    """
     conn = sqlite3.connect('accesos.db')
     cursor = conn.cursor()
     cursor.execute('''
@@ -193,10 +172,10 @@ def delete_result_by_id(result_id: int):
 class EmbeddingData(BaseModel):
     """Datos recibidos de embeddings"""
     embedding: List[float]
-    nombre: Optional[str] = None  # Para enrolamiento
+    nombre: Optional[str] = None  # Nombre de usuario (en enrolamiento)
 
 class FaceRecognitionResult(BaseModel):
-    """Resultado de reconocimiento facial"""
+    """Modelo de datos para resultados de reconocimiento facial"""
     status: str
     message: str
     face_id: Optional[int] = None
@@ -211,7 +190,10 @@ def image_bytes_to_bgr(image_bytes):
     return cv2.imdecode(image_np, cv2.IMREAD_COLOR)
 
 def compare_embeddings(embedding1, embedding2):
-    """Compara dos embeddings normalizados con producto punto"""
+    """
+    Compara dos embeddings usando similitud de coseno
+    (producto punto entre vectores normalizados).
+    """
     embedding1 = embedding1 / np.linalg.norm(embedding1)
     embedding2 = embedding2 / np.linalg.norm(embedding2)
     return np.dot(embedding1, embedding2)
@@ -222,7 +204,11 @@ def compare_embeddings(embedding1, embedding2):
 
 @app.get("/get-embeddings")
 async def get_embeddings():
-    """Devuelve todos los embeddings ESP32 guardados"""
+    """
+    Devuelve todos los embeddings guardados por el ESP32.
+    - Lee el archivo pickle local (face_db_esp32.pkl).
+    - Si no existe, devuelve un diccionario vacío.
+    """
     if not os.path.exists(db_path_esp32):
         return JSONResponse(content={})
     try:
@@ -237,7 +223,11 @@ async def get_embeddings():
 
 @app.post("/upload-embedding")
 async def upload_embedding(data: EmbeddingData, modo: str = Query(..., enum=["enroll", "recognize"])):
-    """Recibe embeddings enviados desde ESP32 (enroll o recognize)"""
+    """
+    Recibe un embedding enviado desde el ESP32.
+    - En modo "enroll": registra un usuario nuevo con nombre y embedding.
+    - En modo "recognize": (no implementado aquí).
+    """
     embedding_list = data.embedding
     if len(embedding_list) != 512:
         raise HTTPException(status_code=400, detail="Embedding length incorrecta")
@@ -253,7 +243,11 @@ async def upload_embedding(data: EmbeddingData, modo: str = Query(..., enum=["en
 
 @app.post("/clear-embeddings-esp32")
 async def clear_embeddings():
-    """Elimina todos los embeddings guardados por ESP32"""
+    """
+    Elimina todos los embeddings guardados por el ESP32.
+    - Limpia el diccionario en memoria.
+    - Reescribe el archivo pickle vacío.
+    """
     global face_db_esp32
     face_db_esp32 = {}
     save_face_db_esp32()
@@ -261,7 +255,11 @@ async def clear_embeddings():
 
 @app.delete("/delete-embedding-esp32/{name}")
 async def delete_embedding(name: str):
-    """Elimina un embedding específico (ESP32)"""
+    """
+    Elimina un embedding específico del ESP32.
+    - Busca el nombre en el diccionario local.
+    - Si existe, lo elimina y actualiza el archivo pickle.
+    """
     if name in face_db_esp32:
         del face_db_esp32[name]
         save_face_db_esp32()
@@ -279,7 +277,12 @@ async def upload_image(
     modo: str = Query(..., enum=["detect", "recognize", "enroll"]),
     nombre: Optional[str] = None
 ):
-    """Recibe imagen y procesa según modo seleccionado"""
+    """
+    Recibe una imagen (bytes JPEG) y la procesa según el modo seleccionado:
+    - detect: solo verifica que haya un rostro en la imagen.
+    - recognize: compara contra la base de datos del servidor.
+    - enroll: añade un usuario nuevo promediando varias muestras.
+    """
     contents = await request.body()
     img = image_bytes_to_bgr(contents)
     faces = face.get(img)
@@ -381,14 +384,20 @@ def clear_embeddings_servidor():
 
 @app.post("/recognition-result/")
 async def recognition_result(result: FaceRecognitionResult):
-    """Recibe y guarda un resultado de reconocimiento en la BD (origen ESP32)"""
+    """
+    Recibe un resultado de reconocimiento facial.
+    - Se guarda en la BD SQLite con origen="ESP32".
+    """
     insert_result(result.status, result.message, result.face_id, origin="ESP32")
     return {"message": "Result received", "status": "success"}
 
 
 @app.get("/recognition-result/")
 async def get_all_results():
-    """Devuelve todos los resultados almacenados"""
+    """
+    Devuelve todos los resultados de reconocimiento almacenados en BD.
+    - Incluye id, estado, mensaje, face_id, timestamp y origen.
+    """
     results = get_results()
     if not results:
         raise HTTPException(status_code=404, detail="No results found")
@@ -400,7 +409,7 @@ async def get_all_results():
             "message": row[2],
             "face_id": row[3],
             "timestamp": row[4],
-            "origin": row[5]   # 👈 ahora se incluye
+            "origin": row[5]   
         }
         for row in results
     ]

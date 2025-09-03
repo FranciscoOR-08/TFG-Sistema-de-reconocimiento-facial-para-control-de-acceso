@@ -10,19 +10,24 @@ class EnrolledFacesPage extends StatefulWidget {
 }
 
 class _EnrolledFacesPageState extends State<EnrolledFacesPage> with TickerProviderStateMixin {
+  // Listas de rostros guardados en ESP32 y en el servidor
   List<String> esp32Faces = [];
   List<String> serverFaces = [];
+
+  // Banderas de carga para mostrar el spinner
   bool isLoadingESP32 = true;
   bool isLoadingServer = true;
 
-  final String ipServidor = 'http://192.168.18.14:8000'; // ⚠️ Personaliza esta IP
+  // Dirección del backend (FastAPI)
+  final String ipServidor = 'http://192.168.18.14:8000'; // ⚠Personaliza esta IP
 
   @override
   void initState() {
     super.initState();
-    fetchFaces();
+    fetchFaces(); // Al iniciar, descarga los rostros desde ambas fuentes
   }
 
+  // Descarga los rostros de ESP32 y Servidor en paralelo
   Future<void> fetchFaces() async {
     await Future.wait([
       fetchFacesFromUrl('$ipServidor/get-face-names', isESP32: true),
@@ -30,6 +35,7 @@ class _EnrolledFacesPageState extends State<EnrolledFacesPage> with TickerProvid
     ]);
   }
 
+  // Llamada genérica para obtener rostros desde una URL
   Future<void> fetchFacesFromUrl(String url, {required bool isESP32}) async {
     try {
       final response = await http.get(Uri.parse(url));
@@ -37,10 +43,10 @@ class _EnrolledFacesPageState extends State<EnrolledFacesPage> with TickerProvid
         final data = json.decode(response.body);
         setState(() {
           if (isESP32) {
-            esp32Faces = List<String>.from(data['faces']);
+            esp32Faces = List<String>.from(data['faces']); // JSON devuelto con {"faces": [...]}
             isLoadingESP32 = false;
           } else {
-            serverFaces = List<String>.from(data);
+            serverFaces = List<String>.from(data); // Servidor devuelve lista simple
             isLoadingServer = false;
           }
         });
@@ -54,6 +60,7 @@ class _EnrolledFacesPageState extends State<EnrolledFacesPage> with TickerProvid
     }
   }
 
+  // Eliminar un rostro concreto (ESP32 o servidor)
   Future<void> deleteFace(String name, {required bool isESP32}) async {
     final url = isESP32
         ? '$ipServidor/delete-embedding-esp32/$name'
@@ -77,6 +84,7 @@ class _EnrolledFacesPageState extends State<EnrolledFacesPage> with TickerProvid
     }
   }
 
+  // Eliminar todos los rostros (ESP32 o servidor)
   Future<void> clearAllFaces({required bool isESP32}) async {
     final url = isESP32
         ? '$ipServidor/clear-embeddings-esp32'
@@ -100,7 +108,7 @@ class _EnrolledFacesPageState extends State<EnrolledFacesPage> with TickerProvid
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2,
+      length: 2, // Dos pestañas: ESP32 y Servidor
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Rostros Enrolados'),
@@ -121,6 +129,7 @@ class _EnrolledFacesPageState extends State<EnrolledFacesPage> with TickerProvid
     );
   }
 
+  // Construcción de cada lista de rostros
   Widget _buildFaceList(List<String> faces, bool isLoading, bool isESP32) {
     if (isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -128,10 +137,11 @@ class _EnrolledFacesPageState extends State<EnrolledFacesPage> with TickerProvid
 
     return Stack(
       children: [
+        // Lista de rostros
         faces.isEmpty
             ? const Center(child: Text('No hay rostros enrolados.'))
             : ListView.builder(
-          padding: const EdgeInsets.only(bottom: 80),
+          padding: const EdgeInsets.only(bottom: 80), // deja espacio al FAB
           itemCount: faces.length,
           itemBuilder: (context, index) {
             final name = faces[index];
@@ -141,6 +151,7 @@ class _EnrolledFacesPageState extends State<EnrolledFacesPage> with TickerProvid
               trailing: IconButton(
                 icon: const Icon(Icons.delete, color: Colors.red),
                 onPressed: () async {
+                  // Confirmación antes de borrar
                   final confirm = await showDialog<bool>(
                     context: context,
                     builder: (ctx) => AlertDialog(
@@ -161,7 +172,7 @@ class _EnrolledFacesPageState extends State<EnrolledFacesPage> with TickerProvid
           },
         ),
 
-        // Botón flotante para eliminar todos
+        // Botón flotante para eliminar todos los rostros
         Positioned(
           bottom: 16,
           right: 16,

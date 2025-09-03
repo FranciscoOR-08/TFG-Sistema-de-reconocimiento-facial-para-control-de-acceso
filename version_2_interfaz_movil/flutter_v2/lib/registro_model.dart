@@ -1,11 +1,22 @@
-//Registro_model.dart
+// =====================================================
+// Representa un acceso (intento de reconocimiento facial)
+// con toda la información obtenida desde el backend.
+//
+// Campos:
+//   - id: identificador único en la base de datos.
+//   - status: estado del reconocimiento ("success" o "error").
+//   - message: mensaje asociado (ej. "Bienvenido Francisco").
+//   - faceId: id de la cara en BD (puede ser null si no aplica).
+//   - timestamp: fecha/hora del registro.
+//   - origin: origen del reconocimiento (SERVER o ESP32).
+// =====================================================
 class Registro {
   final int id;
   final String status;
   final String message;
   final int? faceId;
   final DateTime timestamp;
-  final String origin; // 👈 nuevo campo
+  final String origin;
 
   Registro({
     required this.id,
@@ -16,6 +27,9 @@ class Registro {
     required this.origin,
   });
 
+  // =====================================================
+  // FACTORY – Conversión desde JSON recibido del backend
+  // =====================================================
   factory Registro.fromJson(Map<String, dynamic> json) {
     return Registro(
       id: json['id'],

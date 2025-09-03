@@ -1,31 +1,53 @@
-//Registro_service.dart
+// =====================================================
+// Servicio: RegistroService
+// Encargado de comunicarse con el backend FastAPI
+// para obtener el historial de accesos desde la API.
+// =====================================================
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'registro_model.dart';
 
 class RegistroService {
-  static const String baseUrl = 'http://192.168.18.14:8000'; // Cambia TU_IP por la IP de tu backend
+  // Dirección base del backend FastAPI
+  static const String baseUrl = 'http://192.168.18.14:8000'; // Cámbiala según la IP de tu servidor backend
 
+  /// =====================================================
+  /// fetchRegistros()
+  /// Llama al endpoint `/recognition-result/` del backend
+  /// y devuelve una lista de objetos .
+  ///
+  /// - Si la respuesta es 200 (OK), parsea el JSON.
+  /// - El backend puede devolver:
+  ///     a) Una lista directamente -> `[{}, {}, ...]`
+  ///     b) Un objeto con la clave "results" -> `{"results": [ ... ]}`
+  /// - Si no hay registros (404), devuelve lista vacía.
+  /// - Si ocurre un error inesperado, lanza excepción.
+  /// =====================================================
   static Future<List<Registro>> fetchRegistros() async {
     final response = await http.get(Uri.parse('$baseUrl/recognition-result/'));
 
     if (response.statusCode == 200) {
       final data = json.decode(response.body);
 
-      // Aquí asumimos que el backend devuelve directamente una lista (no un objeto con 'results')
+      // Caso A: backend devuelve directamente una lista
       if (data is List) {
         return data.map((e) => Registro.fromJson(e)).toList();
+
+        // Caso B: backend devuelve un objeto con "results"
       } else if (data is Map && data.containsKey('results')) {
-        // Si backend devuelve un objeto con 'results' (lista)
         final results = data['results'] as List;
         return results.map((e) => Registro.fromJson(e)).toList();
+
       } else {
         throw Exception('Respuesta inesperada del servidor');
       }
+
     } else if (response.statusCode == 404) {
-      // No hay registros, devuelve lista vacía para evitar error
+      // Caso: no hay registros -> lista vacía
       return [];
+
     } else {
+      // Otros errores (500, etc.)
       throw Exception('Error al obtener los registros: Código ${response.statusCode}');
     }
   }

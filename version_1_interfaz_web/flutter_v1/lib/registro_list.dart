@@ -3,6 +3,10 @@ import 'registro_model.dart';
 import 'registro_service.dart';
 import 'package:intl/intl.dart';
 
+
+// =====================================================
+// REGISTRO LIST – Pantalla principal con historial
+// =====================================================
 class RegistroList extends StatefulWidget {
   const RegistroList({super.key});
 
@@ -11,14 +15,15 @@ class RegistroList extends StatefulWidget {
 }
 
 class _RegistroListState extends State<RegistroList> {
-  late Future<List<Registro>> _futureRegistros;
+  late Future<List<Registro>> _futureRegistros; // Contiene la lista de accesos (se carga asíncronamente)
 
   @override
   void initState() {
     super.initState();
-    _futureRegistros = RegistroService.fetchRegistros();
+    _futureRegistros = RegistroService.fetchRegistros(); //Al iniciar la pantalla pedimos los registros al backend
   }
 
+  //Método para refrescar los registros manualmente (botón refresh)
   void _refreshRegistros() {
     setState(() {
       _futureRegistros = RegistroService.fetchRegistros();
@@ -33,6 +38,7 @@ class _RegistroListState extends State<RegistroList> {
       appBar: AppBar(
         title: const Text('Historial de Accesos'),
         actions: [
+          //Botón para volver a cargar registros
           IconButton(
             tooltip: 'Actualizar registros',
             icon: const Icon(Icons.refresh),
@@ -40,12 +46,19 @@ class _RegistroListState extends State<RegistroList> {
           ),
         ],
       ),
+
+      // =====================================================
+      // BODY – FutureBuilder que espera datos del backend
+      // =====================================================
       body: FutureBuilder<List<Registro>>(
         future: _futureRegistros,
         builder: (context, snapshot) {
+          //Caso 1: aún cargando datos
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
-          } else if (snapshot.hasError) {
+          }
+          //Caso 2: error al obtener datos
+          else if (snapshot.hasError) {
             return Center(
               child: Text(
                 'Error: ${snapshot.error}',
@@ -54,7 +67,9 @@ class _RegistroListState extends State<RegistroList> {
                 textAlign: TextAlign.center,
               ),
             );
-          } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          }
+          //Caso 3: no hay datos
+          else if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return Center(
               child: Text(
                 'No hay registros disponibles',
@@ -63,7 +78,7 @@ class _RegistroListState extends State<RegistroList> {
               ),
             );
           }
-
+          //Caso 4: datos disponibles
           final registros = snapshot.data!;
           // Ordenar por más recientes primero
           registros.sort((a, b) => b.timestamp.compareTo(a.timestamp));
@@ -74,10 +89,15 @@ class _RegistroListState extends State<RegistroList> {
             separatorBuilder: (_, __) => const SizedBox(height: 10),
             itemBuilder: (context, index) {
               final r = registros[index];
+              //Formateo de la fecha con intl
               final fecha = DateFormat('d MMMM y, HH:mm:ss', 'es_ES')
                   .format(r.timestamp);
+              //Determinar si el acceso fue exitoso o fallido
               final isSuccess = r.status.toLowerCase() == 'success';
 
+              // =====================================================
+              // CARD – visualización de cada registro
+              // =====================================================
               return Card(
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
@@ -88,6 +108,7 @@ class _RegistroListState extends State<RegistroList> {
                 child: ListTile(
                   contentPadding: const EdgeInsets.symmetric(
                       horizontal: 20, vertical: 14),
+                  //Icono: verde si éxito, rojo si error
                   leading: Icon(
                     isSuccess
                         ? Icons.check_circle_outline
@@ -96,7 +117,7 @@ class _RegistroListState extends State<RegistroList> {
                     size: 36,
                   ),
                   title: Text(
-                    r.message, // 👈 mensaje / nombre en grande
+                    r.message,
                     style: theme.textTheme.titleMedium
                         ?.copyWith(fontWeight: FontWeight.bold),
                   ),
@@ -116,6 +137,8 @@ class _RegistroListState extends State<RegistroList> {
                       ),
                     ],
                   ),
+
+                  // Estado al lado derecho (SUCCESS / ERROR)
                   trailing: Text(
                     r.status.toUpperCase(),
                     style: theme.textTheme.labelLarge?.copyWith(
