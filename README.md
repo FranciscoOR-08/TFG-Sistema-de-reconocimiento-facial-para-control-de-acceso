@@ -77,6 +77,14 @@ Proyecto de **control de acceso mediante reconocimiento facial** con:
 
 ---
 
+## Documentación del proyecto
+
+- [Memoria del Trabajo Fin de Grado (PDF)](./docs/Memoria_TFG.pdf)  
+  Contiene el diseño, desarrollo, pruebas y resultados del sistema.
+
+- [Manual de Usuario (PDF)](./docs/Manual_Usuario.pdf)  
+  Explica paso a paso la instalación, configuración y uso del sistema.
+
 ## Autor
 
 **Francisco** – Proyecto Fin de Grado en Ingeniería.
