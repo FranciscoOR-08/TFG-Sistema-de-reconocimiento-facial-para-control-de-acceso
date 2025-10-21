@@ -43,10 +43,14 @@ La interfaz web permite alternar entre modo local (procesamiento en el ESP32-CAM
 
 ## Aplicación Móvil (Flutter)
 
-| Stream | Historial | Usuarios |
-|---------|------------|----------|
-| ![](docs/flutter_stream.png) | ![](docs/flutter_historial.png) | 
-![](docs/flutter_usuarios.jpeg) |
+<table>
+  <tr>
+    <td><img src="docs/flutter_stream.png" width="200"/></td>
+    <td><img src="docs/flutter_historial.png" width="200"/></td>
+    <td><img src="docs/flutter_usuarios.jpeg" width="200"/></td>
+  </tr>
+</table>
+
 
 La aplicación móvil, desarrollada en **Flutter**, permite:
 - Visualizar la cámara en tiempo real.  
