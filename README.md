@@ -45,9 +45,9 @@ La interfaz web permite alternar entre modo local (procesamiento en el ESP32-CAM
 
 <table>
   <tr>
-    <td><img src="docs/flutter_stream.png" width="200"/></td>
-    <td><img src="docs/flutter_historial.png" width="200"/></td>
-    <td><img src="docs/flutter_usuarios.jpeg" width="200"/></td>
+    <td><img src="docs/flutter_stream.png" width="300"/></td>
+    <td><img src="docs/flutter_historial.png" width="300"/></td>
+    <td><img src="docs/flutter_usuarios.jpeg" width="300"/></td>
   </tr>
 </table>
 
