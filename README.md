@@ -17,7 +17,43 @@ Proyecto de **control de acceso mediante reconocimiento facial** con:
 - **`servidor_v2/`** → Backend FastAPI con soporte para WebSockets y control desde app móvil.  
 - **`flutter_v2/`** → Aplicación Flutter más completa (historial, video en vivo, gestión de rostros enrolados).  
 
+---
 
+## API FastAPI
+
+### Endpoints principales
+
+![FastAPI Endpoints](docs/fast_api_docs2.png)
+
+La API FastAPI gestiona todo el flujo de información entre los módulos.  
+Incluye funcionalidades como:
+- Registro y consulta de accesos.  
+- Gestión de embeddings (ESP32 y servidor).  
+- Envío de comandos y recepción de logs del ESP32.  
+- Procesamiento de imágenes y reconocimiento facial.
+
+---
+
+## Interfaz Web
+![Panel principal de la interfaz web](docs/web_panel.png)
+
+La interfaz web permite alternar entre modo local (procesamiento en el ESP32-CAM) y remoto (servidor), activar la detección de rostros, realizar reconocimiento facial comparando con usuarios registrados, añadir nuevos usuarios con sus embeddings, y consultar o eliminar usuarios de forma individual o total de los usuarios.
+
+---
+
+## Aplicación Móvil (Flutter)
+
+| Stream | Historial | Usuarios |
+|---------|------------|----------|
+| ![](docs/flutter_stream.png) | ![](docs/flutter_historial.png) | ![](docs/flutter_usuarios.jpeg) |
+
+La aplicación móvil, desarrollada en **Flutter**, permite:
+- Visualizar la cámara en tiempo real.  
+- Consultar registros de acceso.  
+- Enrolar o eliminar rostros.  
+- Alternar entre el modo local (ESP32) y remoto (servidor).
+
+---
 
 ## Archivos más relevantes
 
